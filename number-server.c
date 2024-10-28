@@ -1,30 +1,8 @@
 #include "http-server.h"
 #include <string.h>
 
-char const HTTP_200_OK[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n";
-char const HTTP_404_NOT_FOUND[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n";
-
 int global_num = 0; // Persistent server state
 
-void handle_404(int client_sock, char *url)  {
-    printf("SERVER LOG: Got request for unrecognized url \"%s\"\n", url);
-
-    char response_buff[BUFFER_SIZE];
-    snprintf(response_buff, BUFFER_SIZE, "Error 404:\r\nUnrecognized url \"%s\"\r\n", url);
-    // snprintf includes a null-terminator
-
-    write(client_sock, HTTP_404_NOT_FOUND, strlen(HTTP_404_NOT_FOUND));
-    write(client_sock, response_buff, strlen(response_buff));
-}
-
-void handle_shownum(int client_sock) {
-    char response_buff[BUFFER_SIZE];
-    snprintf(response_buff, BUFFER_SIZE, "Your number is %d\r\n", global_num);
-    // snprintf always null-terminates
-
-    write(client_sock, HTTP_200_OK, strlen(HTTP_200_OK));
-    write(client_sock, response_buff, strlen(response_buff));
-}
 
 void handle_response(char *request, int client_sock) {
     char url[256];
@@ -38,12 +16,7 @@ void handle_response(char *request, int client_sock) {
     }
     printf("SERVER LOG: Url is \"%s\"\n", url);
 
-    // show number path
-    if (strncmp(url, "/shownum", 8)) { // if url starts with shownum
-        handle_shownum(client_sock);
-    } else {
-        handle_404(client_sock, url);
-    }
+    // TODO: Respond appropriately based on the url
 }
 
 int main(int argc, char *argv[]) {
