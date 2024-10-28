@@ -14,6 +14,14 @@ void start_server(void(*handler)(char*, int), int port) {
         exit(EXIT_FAILURE);
     }
 
+    // Allow the port to be reused (fixes "bind failed: Address already in use")
+    int enable = 1;
+    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+            perror("setsockopt(SO_REUSEADDR) failed");
+    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEPORT, &enable, sizeof(int)) < 0)
+            perror("setsockopt(SO_REUSEPORT) failed");
+
+
     
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -48,8 +56,16 @@ void start_server(void(*handler)(char*, int), int port) {
         }
 
         // Receive the request
-        recv(client_sock, buffer, BUFFER_SIZE - 1, 0);
-        buffer[BUFFER_SIZE - 1] = '\0';  
+        int num_read = recv(client_sock, buffer, BUFFER_SIZE - 1, 0);
+        if(num_read < 0) {
+            perror("recv failed");
+            close(client_sock);
+            close(server_sock);
+            exit(EXIT_FAILURE);
+        }
+        assert(num_read <= BUFFER_SIZE - 1);
+        buffer[num_read] = '\0';
+
 
 
         (*handler)(buffer, client_sock);

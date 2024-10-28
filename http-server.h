@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <time.h>
+#include <assert.h>
 
 
 void start_server(void(*handler)(char*, int), int port);
