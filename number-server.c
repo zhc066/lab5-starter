@@ -1,134 +1,50 @@
 #include "http-server.h"
 #include <string.h>
 
-char const* HTTP_200_OK = "HTTP/1.1 200 OK\nContent-Type: text/plain\n\n";
-char const* HTTP_404_NOT_FOUND = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n404 Not Found\n";
-int num = 0;
+char const HTTP_200_OK[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n";
+char const HTTP_404_NOT_FOUND[] = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\n404 Not Found\r\n";
 
-// Function to parse the HTTP request
-// Returns 1 if the request is valid, 0 otherwise
-uint8_t parse_http_request(char *request, char *url) {
-    char method[10], version[10], host[256];
-    char content_type[50];
-    int content_length = 0;
+int global_num = 0; // Persistent server state
 
-    // Parse the request line (method, URL, HTTP version)
-    if (sscanf(request, "%s %s %s", method, url, version) != 3) {
-        printf("Invalid request line\n");
-        return 0;
-    }
+void handle_404(int client_sock, char *url)  {
+    printf("SERVER LOG: Got request for unrecognized url \"%s\"\n", url);
 
-    // printf("Method: %s\n", method);
-    // printf("URL: %s\n", url);
-    // printf("Version: %s\n", version);
+    char response_buff[BUFFER_SIZE];
+    snprintf(response_buff, BUFFER_SIZE, "Error 404: Unrecognized url \"%s\"\r\n", url);
+    // snprintf includes a null-terminator
 
-    // Move the pointer to start parsing the headers
-    char *headers = strstr(request, "\r\n") + 2;
-
-    // Parse headers
-    while (strncmp(headers, "\r\n", 2) != 0) {
-        if (sscanf(headers, "Host: %s", host) == 1) {
-            printf("Host: %s\n", host);
-        } else if (sscanf(headers, "Content-Type: %s", content_type) == 1) {
-            printf("Content-Type: %s\n", content_type);
-        } else if (sscanf(headers, "Content-Length: %d", &content_length) == 1) {
-            printf("Content-Length: %d\n", content_length);
-        }
-
-        // next header
-        headers = strstr(headers, "\r\n") + 2;
-    }
-
-    // Validate the method (only GET)
-    if (strcmp(method, "GET") != 0) {
-        printf("Invalid HTTP method: %s\n", method);
-        return 0;
-    }
-
-    // Check if Host header is present
-    if (strlen(host) == 0) {
-        printf("Missing Host header\n");
-        return 0;
-    }
-
-    // If Content-Length is provided, validate the body
-    if (content_length > 0) {
-        char *body = strstr(headers, "\r\n\r\n") + 4; // Move past headers
-        if ((int)strlen(body) < content_length) {
-            printf("Content-Length does not match body size\n");
-            return 0;
-        }
-        printf("Body: %s\n", body);
-    }
-
-    return 1;
-}
-
-void handle_basic(int client_sock) {
-    char const intro[] = {
-        67, 83, 69, 32, 50, 57, 32, 76, 97, 98, 32, 53, 32, 87, 101, 98, 115, 101, 114, 118, 101, 114, 10, 10, 82, 111, 117, 116, 101, 115, 32, 97, 118, 97,
-        105, 108, 97, 98, 108, 101, 32, 105, 110, 32, 116, 104, 105, 115, 32, 65, 80, 73, 58, 10, 9, 42, 32, 47, 115, 104, 111, 119, 110, 117, 109, 32, 45, 32,
-        80, 114, 105, 110, 116, 32, 111, 117, 116, 32, 116, 104, 101, 32, 99, 117, 114, 114, 101, 110, 116, 32, 118, 97, 108, 117, 101, 32, 111, 102, 32, 116,
-        104, 101, 32, 98, 97, 99, 107, 101, 110, 100, 39, 115, 32, 110, 117, 109, 98, 101, 114, 10, 9, 42, 32, 47, 105, 110, 99, 114, 101, 109, 101, 110, 116,
-        32, 45, 32, 73, 110, 99, 114, 101, 109, 101, 110, 116, 32, 116, 104, 101, 32, 98, 97, 99, 107, 101, 110, 100, 39, 115, 32, 110, 117, 109, 98, 101, 114,
-        32, 98, 121, 32, 49, 10, 9, 42, 32, 47, 97, 100, 100, 63, 118, 97, 108, 117, 101, 61, 60, 118, 97, 108, 117, 101, 62, 32, 45, 32, 65, 100, 100, 32, 118,
-        97, 108, 117, 101, 32, 116, 111, 32, 98, 97, 99, 107, 101, 110, 100, 39, 115, 32, 110, 117, 109, 98, 101, 114, 0
-    };
-
-    char response[BUFFER_SIZE];
-    response[BUFFER_SIZE-1] = '\0'; // null-terminate, in case we run right up to the end
-
-    // Copy in the HTTP header.
-    // strncpy won't leave room for a null terminator if string is too long,
-    // so tell it to use one less than the full size of the buffer
-    strncpy(response, HTTP_200_OK, sizeof(response) - 1);
-
-    // Append our actual response
-    // When using strncat, need to subtract size of string already in buffer
-    strncat(response, intro,       sizeof(response) - 1 - strlen(response));
-
-    // Send our response to the client
-    write(client_sock, response, strlen(response));
+    write(client_sock, HTTP_404_NOT_FOUND, strlen(HTTP_404_NOT_FOUND));
+    write(client_sock, response_buff, strlen(response_buff));
 }
 
 void handle_shownum(int client_sock) {
-    /*
-        YOUR CODE HERE
-    */
-}
+    char response_buff[BUFFER_SIZE];
+    snprintf(response_buff, BUFFER_SIZE, "Your number is %d\r\n", global_num);
+    // snprintf always null-terminates
 
-void handle_increment(int client_sock) {
-    /*
-        YOUR CODE HERE
-    */
-}
-
-void handle_add(int client_sock, char *query) {
-    /*
-        YOUR CODE HERE
-    */
+    write(client_sock, HTTP_200_OK, strlen(HTTP_200_OK));
+    write(client_sock, response_buff, strlen(response_buff));
 }
 
 void handle_response(char *request, int client_sock) {
     char url[256], query[256];
 
-    //printf("Got request: \"%s\"\n", request);
+    // request looks like:
+    // "GET /someurl 1.1\r\n
+    printf("SERVER LOG: Got request \"%s\"\n", request);
 
-    if (!parse_http_request(request, url)) {
-        printf("Invalid request header\n");
+    char version[10];
+    // Parse the request line (method, URL, HTTP version)
+    if (sscanf(request, "GET %s %s", url, version) != 1) {
+        printf("Invalid request line\n");
         return;
     }
 
     // show number path
-    if (0) {
-        handle_shownum(0);
-    } else if (0) {
-        handle_increment(0);
-    } else if (0) {
-        strcpy(query, strchr(url, '?') + 1);
-        handle_add(0, "");
+    if (strncmp(url, "/shownum", 8)) { // if url starts with shownum
+        handle_shownum(client_sock);
     } else {
-        handle_basic(client_sock);
+        handle_404(client_sock, url);
     }
 }
 
@@ -137,5 +53,44 @@ int main(int argc, char *argv[]) {
     if(argc >= 2) {
         port = atoi(argv[1]);
     }
+
     start_server(&handle_response, port);
 }
+
+
+
+
+// == STASHED FOR LATER
+
+// // strncpy won't leave room for a null terminator if string is too long,
+// // so tell it to use one less than the full size of the buffer
+
+// // Append our actual response
+// // When using strncat, need to subtract size of string already in buffer
+// strncat(response, msg1,       sizeof(response) - 1 - strlen(response));
+// strncat(response, url,        sizeof(response) - 1 - strlen(response));
+// strncat(response, msg2,       sizeof(response) - 1 - strlen(response));
+
+       //     "Valid endpoints are:\n"
+       //     "    /shownum: prints current value of number\n"
+       //     "    /increment: increments number (and prints current value)\n"
+       //     "    /add?value=XXX: adds `XXX` (as an integer) to number";
+       //
+    // use snprintf to fmt the url into a response message
+    //char response[BUFFER_SIZE];
+    //snprintf(response, BUFFER_SIZE, msg_fmt, url);
+
+// Function to parse the HTTP request
+// Returns 1 if the request is valid, 0 otherwise
+// uint8_t parse_http_request(char *request, char *url) {
+//     char method[10], version[10], host[256];
+//
+//     // Parse the request line (method, URL, HTTP version)
+//     if (sscanf(request, "GET %s %s", url, version) != 1) {
+//         printf("Invalid request line\n");
+//         return 0;
+//     }
+//
+//     return 1;
+// }
+
